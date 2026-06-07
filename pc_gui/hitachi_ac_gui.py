@@ -167,7 +167,7 @@ class HitachiApp(tk.Tk):
         ttk.Label(tools, text="结束").grid(row=0, column=2, padx=2, pady=2)
         ttk.Entry(tools, textvariable=self.end_time_var, width=6).grid(row=0, column=3, padx=2, pady=2)
         ttk.Label(tools, text="间隔").grid(row=0, column=4, padx=2, pady=2)
-        ttk.Combobox(tools, textvariable=self.interval_var, values=[1, 5, 10, 15, 30], state="readonly", width=4).grid(
+        ttk.Combobox(tools, textvariable=self.interval_var, values=[1, 5, 10, 15, 30, 60], state="readonly", width=4).grid(
             row=0, column=5, padx=2, pady=2
         )
         ttk.Label(tools, text="模式").grid(row=0, column=6, padx=2, pady=2)
