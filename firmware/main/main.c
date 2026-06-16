@@ -31,28 +31,24 @@ static void print_log_line(const datetime_t *now, const char *type, uint8_t temp
 static esp_err_t apply_control(uint8_t temperature_x2, uint8_t mode, uint8_t fan_speed, const char *type)
 {
     datetime_t now = {0};
-    esp_err_t time_err = rtc_ds3231_get_time(&now);
-    if (time_err != ESP_OK) {
-        ESP_LOGW(TAG, "rtc read failed during control: %s", esp_err_to_name(time_err));
-    }
+    time_utils_get_system_time(&now);
 
     s_state.temperature_x2 = temperature_x2;
     s_state.mode = mode;
     s_state.fan_speed = fan_speed;
     s_state.power_on = mode != AC_MODE_OFF;
 
-    esp_err_t err = ir_hitachi_send_state(&s_state, time_err == ESP_OK ? &now : NULL);
+    esp_err_t err = ir_hitachi_send_state(&s_state, &now);
     if (err == ESP_OK) {
         storage_save_state(&s_state);
-        if (time_err == ESP_OK) {
-            print_log_line(&now, type, temperature_x2, mode, fan_speed);
-        }
+        print_log_line(&now, type, temperature_x2, mode, fan_speed);
     }
     return err;
 }
 
 static esp_err_t sync_time(const datetime_t *dt)
 {
+    time_utils_set_system_time(dt);
     esp_err_t err = rtc_ds3231_set_time(dt);
     if (err == ESP_OK) {
         print_log_line(dt, "sync", s_state.temperature_x2, s_state.mode, s_state.fan_speed);
@@ -96,7 +92,8 @@ static void schedule_task(void *arg)
     while (true) {
         datetime_t now = {0};
         schedule_entry_t due = {0};
-        if (rtc_ds3231_get_time(&now) == ESP_OK && scheduler_check_due(&now, &due)) {
+        time_utils_get_system_time(&now);
+        if (scheduler_check_due(&now, &due)) {
             apply_control(due.temperature_x2, due.mode, due.fan_speed, "scheduled");
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -149,7 +146,15 @@ void app_main(void)
     }
 
     bool rtc_valid = false;
-    if (rtc_ds3231_time_is_valid(&rtc_valid) == ESP_OK && !rtc_valid) {
+    datetime_t rtc_now = {0};
+    if (rtc_ds3231_time_is_valid(&rtc_valid) == ESP_OK && rtc_valid) {
+        if (rtc_ds3231_get_time(&rtc_now) == ESP_OK) {
+            time_utils_set_system_time(&rtc_now);
+            char formatted[32] = {0};
+            time_utils_format_datetime(&rtc_now, formatted, sizeof(formatted));
+            ESP_LOGI(TAG, "System time synced from DS3231: %s", formatted);
+        }
+    } else {
         ESP_LOGW(TAG, "DS3231 oscillator stop flag is set; sync time from GUI");
     }
 

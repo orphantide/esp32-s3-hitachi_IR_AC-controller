@@ -1,6 +1,8 @@
 #include "time_utils.h"
 
 #include <stdio.h>
+#include <time.h>
+#include <sys/time.h>
 
 static bool is_leap(int year)
 {
@@ -85,4 +87,46 @@ void time_utils_format_datetime(const datetime_t *dt, char *out, size_t out_size
 uint16_t time_utils_minute_of_day(const datetime_t *dt)
 {
     return (uint16_t)(dt->hour * 60 + dt->minute);
+}
+
+void time_utils_set_system_time(const datetime_t *dt)
+{
+    if (!dt) {
+        return;
+    }
+    struct tm tm_info = {0};
+    tm_info.tm_year = dt->year - 1900;
+    tm_info.tm_mon = dt->month - 1;
+    tm_info.tm_mday = dt->day;
+    tm_info.tm_hour = dt->hour;
+    tm_info.tm_min = dt->minute;
+    tm_info.tm_sec = dt->second;
+    tm_info.tm_isdst = -1;
+
+    time_t t = mktime(&tm_info);
+    if (t != (time_t)-1) {
+        struct timeval tv = {
+            .tv_sec = t,
+            .tv_usec = 0
+        };
+        settimeofday(&tv, NULL);
+    }
+}
+
+void time_utils_get_system_time(datetime_t *dt)
+{
+    if (!dt) {
+        return;
+    }
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    struct tm tm_info;
+    localtime_r(&tv.tv_sec, &tm_info);
+
+    dt->year = tm_info.tm_year + 1900;
+    dt->month = tm_info.tm_mon + 1;
+    dt->day = tm_info.tm_mday;
+    dt->hour = tm_info.tm_hour;
+    dt->minute = tm_info.tm_min;
+    dt->second = tm_info.tm_sec;
 }
