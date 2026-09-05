@@ -5,8 +5,8 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-import pandas as pd
 import serial
+from openpyxl import Workbook
 from serial.tools import list_ports
 
 
@@ -494,7 +494,14 @@ class HitachiApp(tk.Tk):
                 "左右摆风": sh
             })
         try:
-            pd.DataFrame(data).to_excel(path, index=False)
+            workbook = Workbook()
+            worksheet = workbook.active
+            worksheet.title = "计划表"
+            headers = ["时间", "温度", "模式", "风速", "上下摆风", "左右摆风"]
+            worksheet.append(headers)
+            for record in data:
+                worksheet.append([record[header] for header in headers])
+            workbook.save(path)
             messagebox.showinfo("完成", f"计划表已成功导出：{path}")
         except Exception as exc:
             messagebox.showerror("导出失败", str(exc))
