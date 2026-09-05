@@ -56,7 +56,7 @@ esp_err_t scheduler_load(void)
     return err == ESP_ERR_INVALID_RESPONSE ? ESP_OK : err;
 }
 
-esp_err_t scheduler_add_or_replace(uint16_t minute_of_day, uint8_t temperature_x2, uint8_t mode, uint8_t fan_speed)
+esp_err_t scheduler_add_or_replace(uint16_t minute_of_day, uint8_t temperature_x2, uint8_t mode, uint8_t fan_speed, bool swing_v, bool swing_h)
 {
     if (minute_of_day >= 1440 || temperature_x2 < APP_TEMP_X2_MIN || temperature_x2 > APP_TEMP_X2_MAX || mode > AC_MODE_OFF || fan_speed > 5) {
         return ESP_ERR_INVALID_ARG;
@@ -69,6 +69,8 @@ esp_err_t scheduler_add_or_replace(uint16_t minute_of_day, uint8_t temperature_x
             s_entries[i].temperature_x2 = temperature_x2;
             s_entries[i].mode = mode;
             s_entries[i].fan_speed = fan_speed;
+            s_entries[i].swing_v = swing_v;
+            s_entries[i].swing_h = swing_h;
             esp_err_t err = storage_save_schedule(s_entries);
             unlock();
             return err;
@@ -87,6 +89,8 @@ esp_err_t scheduler_add_or_replace(uint16_t minute_of_day, uint8_t temperature_x
         .temperature_x2 = temperature_x2,
         .mode = mode,
         .fan_speed = fan_speed,
+        .swing_v = swing_v,
+        .swing_h = swing_h,
         .enabled = true,
     };
     qsort(s_entries, APP_MAX_SCHEDULES, sizeof(schedule_entry_t), compare_entries);

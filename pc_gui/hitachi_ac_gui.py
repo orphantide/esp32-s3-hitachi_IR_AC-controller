@@ -78,8 +78,12 @@ class HitachiApp(tk.Tk):
         self.temp_var = tk.DoubleVar(value=26.0)
         self.mode_var = tk.StringVar(value="制冷")
         self.fan_var = tk.StringVar(value="自动")
+        self.swing_v_var = tk.StringVar(value="固定")
+        self.swing_h_var = tk.StringVar(value="固定")
         self.sched_mode_var = tk.StringVar(value="制冷")
         self.sched_fan_speed_var = tk.StringVar(value="自动")
+        self.sched_swing_v_var = tk.StringVar(value="固定")
+        self.sched_swing_h_var = tk.StringVar(value="固定")
         self.start_time_var = tk.StringVar(value="09:00")
         self.end_time_var = tk.StringVar(value="18:00")
         self.interval_var = tk.IntVar(value=10)
@@ -93,22 +97,28 @@ class HitachiApp(tk.Tk):
     def _build_ui(self):
         root = ttk.Frame(self, padding=(10, 4, 10, 10))
         root.pack(fill=tk.BOTH, expand=True)
-        root.columnconfigure(0, weight=1)
-        root.columnconfigure(1, weight=0)
-        root.rowconfigure(1, weight=1)
 
-        self._build_connection(root)
-        self._build_realtime(root)
-        self._build_schedule(root)
-        self._build_log(root)
+        # Create Right master frame first so it receives its full requested size and is not squeezed
+        right_pane = ttk.Frame(root)
+        right_pane.pack(side=tk.RIGHT, fill=tk.BOTH, padx=(8, 0))
+
+        # Create Left master frame to occupy the remaining space
+        left_pane = ttk.Frame(root)
+        left_pane.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Build widgets inside their respective master frames
+        self._build_connection(left_pane)
+        self._build_schedule(left_pane)
+        self._build_realtime(right_pane)
+        self._build_log(right_pane)
 
     def _build_connection(self, parent):
         frame = ttk.LabelFrame(parent, text="连接管理", padding=8)
-        frame.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
-        frame.columnconfigure(9, weight=1)
+        frame.pack(fill=tk.X, pady=(0, 8))
+        frame.columnconfigure(7, weight=1)
 
         ttk.Label(frame, text="COM口").grid(row=0, column=0, padx=(0, 6))
-        self.port_combo = ttk.Combobox(frame, textvariable=self.port_var, state="readonly", width=20)
+        self.port_combo = ttk.Combobox(frame, textvariable=self.port_var, state="readonly", width=10)
         self.port_combo.grid(row=0, column=1, sticky="w")
         ttk.Button(frame, text="扫描", command=self.refresh_ports).grid(row=0, column=2, padx=(6, 0))
         ttk.Button(frame, text="连接", command=self.connect).grid(row=0, column=3, padx=(6, 0))
@@ -119,7 +129,7 @@ class HitachiApp(tk.Tk):
 
     def _build_realtime(self, parent):
         frame = ttk.LabelFrame(parent, text="实时控制", padding=8)
-        frame.grid(row=0, column=1, sticky="nsew", pady=(0, 8))
+        frame.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(frame, text="温度").grid(row=0, column=0, sticky="w")
         ttk.Spinbox(
@@ -129,52 +139,70 @@ class HitachiApp(tk.Tk):
             increment=0.5,
             format="%.1f",
             textvariable=self.temp_var,
-            width=8,
-        ).grid(row=0, column=1, padx=6)
+            width=5,
+        ).grid(row=0, column=1, padx=4)
         ttk.Scale(
             frame,
             from_=16.0,
             to=30.0,
             variable=self.temp_var,
             orient=tk.HORIZONTAL,
-            length=160,
+            length=100,
             command=self._snap_temp,
-        ).grid(row=0, column=2)
+        ).grid(row=0, column=2, columnspan=3, sticky="w")
 
         ttk.Label(frame, text="模式").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        ttk.Combobox(frame, textvariable=self.mode_var, values=list(MODES), state="readonly", width=8).grid(
-            row=1, column=1, padx=6, pady=(8, 0)
+        ttk.Combobox(frame, textvariable=self.mode_var, values=list(MODES), state="readonly", width=5).grid(
+            row=1, column=1, padx=4, pady=(8, 0)
         )
         
         ttk.Label(frame, text="风速").grid(row=2, column=0, sticky="w", pady=(8, 0))
-        ttk.Combobox(frame, textvariable=self.fan_var, values=list(FAN_SPEEDS), state="readonly", width=8).grid(
-            row=2, column=1, padx=6, pady=(8, 0)
+        ttk.Combobox(frame, textvariable=self.fan_var, values=list(FAN_SPEEDS), state="readonly", width=5).grid(
+            row=2, column=1, padx=4, pady=(8, 0)
+        )
+
+        ttk.Label(frame, text="上下").grid(row=1, column=2, sticky="w", padx=(8, 0), pady=(8, 0))
+        ttk.Combobox(frame, textvariable=self.swing_v_var, values=["固定", "摆动"], state="readonly", width=5).grid(
+            row=1, column=3, padx=4, pady=(8, 0)
+        )
+
+        ttk.Label(frame, text="左右").grid(row=2, column=2, sticky="w", padx=(8, 0), pady=(8, 0))
+        ttk.Combobox(frame, textvariable=self.swing_h_var, values=["固定", "摆动"], state="readonly", width=5).grid(
+            row=2, column=3, padx=4, pady=(8, 0)
         )
         
-        ttk.Button(frame, text="立即发送", command=self.send_set).grid(row=1, column=2, rowspan=2, pady=(8, 0), sticky="nsew")
+        ttk.Button(frame, text="立即发送", command=self.send_set).grid(row=1, column=4, rowspan=2, padx=(8, 4), pady=(8, 0), sticky="nsew")
 
     def _build_schedule(self, parent):
         frame = ttk.LabelFrame(parent, text="计划表", padding=8)
-        frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8))
+        frame.pack(fill=tk.BOTH, expand=True)
         frame.rowconfigure(1, weight=1)
         frame.columnconfigure(0, weight=1)
 
         tools = ttk.Frame(frame)
         tools.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        tools.columnconfigure((1, 3, 5, 7, 9), weight=1)
 
+        # Row 0 of tools
         ttk.Label(tools, text="起始").grid(row=0, column=0, padx=2, pady=2)
-        ttk.Entry(tools, textvariable=self.start_time_var, width=6).grid(row=0, column=1, padx=2, pady=2)
+        ttk.Entry(tools, textvariable=self.start_time_var, width=6).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
         ttk.Label(tools, text="结束").grid(row=0, column=2, padx=2, pady=2)
-        ttk.Entry(tools, textvariable=self.end_time_var, width=6).grid(row=0, column=3, padx=2, pady=2)
+        ttk.Entry(tools, textvariable=self.end_time_var, width=6).grid(row=0, column=3, padx=2, pady=2, sticky="ew")
         ttk.Label(tools, text="间隔").grid(row=0, column=4, padx=2, pady=2)
         ttk.Combobox(tools, textvariable=self.interval_var, values=[1, 5, 10, 15, 30, 60], state="readonly", width=4).grid(
-            row=0, column=5, padx=2, pady=2
+            row=0, column=5, padx=2, pady=2, sticky="ew"
         )
         ttk.Label(tools, text="模式").grid(row=0, column=6, padx=2, pady=2)
         ttk.Combobox(tools, textvariable=self.sched_mode_var, values=list(MODES), state="readonly", width=5).grid(
-            row=0, column=7, padx=2, pady=2
+            row=0, column=7, padx=2, pady=2, sticky="ew"
         )
-        ttk.Label(tools, text="温度").grid(row=0, column=8, padx=2, pady=2)
+        ttk.Label(tools, text="风速").grid(row=0, column=8, padx=2, pady=2)
+        ttk.Combobox(tools, textvariable=self.sched_fan_speed_var, values=list(FAN_SPEEDS), state="readonly", width=6).grid(
+            row=0, column=9, padx=2, pady=2, sticky="ew"
+        )
+
+        # Row 1 of tools
+        ttk.Label(tools, text="温度").grid(row=1, column=0, padx=2, pady=2)
         ttk.Spinbox(
             tools,
             from_=16.0,
@@ -183,8 +211,8 @@ class HitachiApp(tk.Tk):
             format="%.1f",
             textvariable=self.start_temp_var,
             width=5,
-        ).grid(row=0, column=9, padx=2, pady=2)
-        ttk.Label(tools, text="阶梯").grid(row=0, column=10, padx=2, pady=2)
+        ).grid(row=1, column=1, padx=2, pady=2, sticky="ew")
+        ttk.Label(tools, text="阶梯").grid(row=1, column=2, padx=2, pady=2)
         ttk.Spinbox(
             tools,
             from_=-5.0,
@@ -193,23 +221,33 @@ class HitachiApp(tk.Tk):
             format="%.1f",
             textvariable=self.step_var,
             width=5,
-        ).grid(row=0, column=11, padx=2, pady=2)
-        ttk.Label(tools, text="风速").grid(row=0, column=12, padx=2, pady=2)
-        ttk.Combobox(tools, textvariable=self.sched_fan_speed_var, values=list(FAN_SPEEDS), state="readonly", width=6).grid(
-            row=0, column=13, padx=2, pady=2
+        ).grid(row=1, column=3, padx=2, pady=2, sticky="ew")
+        ttk.Label(tools, text="上下").grid(row=1, column=4, padx=2, pady=2)
+        ttk.Combobox(tools, textvariable=self.sched_swing_v_var, values=["固定", "摆动"], state="readonly", width=4).grid(
+            row=1, column=5, padx=2, pady=2, sticky="ew"
         )
-        ttk.Button(tools, text="生成", command=self.generate_schedule, width=6).grid(row=0, column=14, padx=6, pady=2)
+        ttk.Label(tools, text="左右").grid(row=1, column=6, padx=2, pady=2)
+        ttk.Combobox(tools, textvariable=self.sched_swing_h_var, values=["固定", "摆动"], state="readonly", width=4).grid(
+            row=1, column=7, padx=2, pady=2, sticky="ew"
+        )
+        ttk.Button(tools, text="生成", command=self.generate_schedule, width=6).grid(
+            row=1, column=8, columnspan=2, padx=(6, 0), pady=2, sticky="ew"
+        )
 
-        columns = ("time", "temperature", "mode", "fan_speed")
+        columns = ("time", "temperature", "mode", "fan_speed", "swing_v", "swing_h")
         self.schedule_tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="browse")
         self.schedule_tree.heading("time", text="时间")
         self.schedule_tree.heading("temperature", text="温度")
         self.schedule_tree.heading("mode", text="模式")
         self.schedule_tree.heading("fan_speed", text="风速")
-        self.schedule_tree.column("time", width=100, anchor=tk.CENTER)
-        self.schedule_tree.column("temperature", width=80, anchor=tk.CENTER)
-        self.schedule_tree.column("mode", width=100, anchor=tk.CENTER)
-        self.schedule_tree.column("fan_speed", width=100, anchor=tk.CENTER)
+        self.schedule_tree.heading("swing_v", text="上下摆风")
+        self.schedule_tree.heading("swing_h", text="左右摆风")
+        self.schedule_tree.column("time", width=80, anchor=tk.CENTER)
+        self.schedule_tree.column("temperature", width=70, anchor=tk.CENTER)
+        self.schedule_tree.column("mode", width=80, anchor=tk.CENTER)
+        self.schedule_tree.column("fan_speed", width=80, anchor=tk.CENTER)
+        self.schedule_tree.column("swing_v", width=90, anchor=tk.CENTER)
+        self.schedule_tree.column("swing_h", width=90, anchor=tk.CENTER)
         self.schedule_tree.grid(row=1, column=0, sticky="nsew")
         self.schedule_tree.bind("<Double-1>", self.edit_schedule_cell)
 
@@ -230,11 +268,11 @@ class HitachiApp(tk.Tk):
 
     def _build_log(self, parent):
         frame = ttk.LabelFrame(parent, text="日志", padding=8)
-        frame.grid(row=1, column=1, sticky="nsew")
+        frame.pack(fill=tk.BOTH, expand=True)
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
 
-        self.log_text = tk.Text(frame, height=18, width=30, wrap=tk.NONE)
+        self.log_text = tk.Text(frame, height=18, width=22, wrap=tk.NONE)
         self.log_text.grid(row=0, column=0, sticky="nsew")
         scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.log_text.yview)
         scroll.grid(row=0, column=1, sticky="ns")
@@ -281,14 +319,16 @@ class HitachiApp(tk.Tk):
         temp = self._format_temp(self.temp_var.get())
         mode = MODES[self.mode_var.get()]
         fan = FAN_SPEEDS[self.fan_var.get()]
-        self.send_command(f"SET,{temp},{mode},{fan}")
+        sv = 1 if self.swing_v_var.get() == "摆动" else 0
+        sh = 1 if self.swing_h_var.get() == "摆动" else 0
+        self.send_command(f"SET,{temp},{mode},{fan},{sv},{sh}")
 
     def sync_time(self):
         now = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.send_command(f"TIME,{now}")
 
     def add_schedule_row(self):
-        self.schedule_tree.insert("", tk.END, values=("09:00", "26", "制冷", "自动"))
+        self.schedule_tree.insert("", tk.END, values=("09:00", "26", "制冷", "自动", "固定", "固定"))
 
     def edit_schedule_cell(self, event):
         region = self.schedule_tree.identify_region(event.x, event.y)
@@ -311,6 +351,9 @@ class HitachiApp(tk.Tk):
             editor.set(current_value)
         elif col_index == 3:
             editor = ttk.Combobox(self.schedule_tree, values=list(FAN_SPEEDS), state="readonly")
+            editor.set(current_value)
+        elif col_index in (4, 5):
+            editor = ttk.Combobox(self.schedule_tree, values=["固定", "摆动"], state="readonly")
             editor.set(current_value)
         else:
             editor = ttk.Entry(self.schedule_tree)
@@ -375,6 +418,8 @@ class HitachiApp(tk.Tk):
             return
 
         self.clear_local_schedule()
+        sv = self.sched_swing_v_var.get()
+        sh = self.sched_swing_h_var.get()
         for index, minute in enumerate(range(start, end + 1, interval)):
             current_temp = max(16.0, min(30.0, temp + index * step))
             self.schedule_tree.insert(
@@ -385,6 +430,8 @@ class HitachiApp(tk.Tk):
                     self._format_temp(current_temp),
                     self.sched_mode_var.get(),
                     self.sched_fan_speed_var.get(),
+                    sv,
+                    sh,
                 ),
             )
 
@@ -405,8 +452,11 @@ class HitachiApp(tk.Tk):
                 self.serial_worker.send("CLEAR")
                 self.events.put(("line", "> CLEAR"))
                 time.sleep(0.15)
-                for time_text, temp, mode_name, fan_speed_name in rows:
-                    cmd = f"SCHEDULE,{time_text},{temp},{MODES[mode_name]},{FAN_SPEEDS[fan_speed_name]}"
+                for row in rows:
+                    time_text, temp, mode_name, fan_speed_name = row[0], row[1], row[2], row[3]
+                    sv = 1 if (len(row) > 4 and row[4] == "摆动") else 0
+                    sh = 1 if (len(row) > 5 and row[5] == "摆动") else 0
+                    cmd = f"SCHEDULE,{time_text},{temp},{MODES[mode_name]},{FAN_SPEEDS[fan_speed_name]},{sv},{sh}"
                     self.serial_worker.send(cmd)
                     self.events.put(("line", f"> {cmd}"))
                     time.sleep(0.08)
@@ -431,12 +481,17 @@ class HitachiApp(tk.Tk):
             return
         data = []
         for item in items:
-            time_text, temp, mode_name, fan_speed_name = self.schedule_tree.item(item, "values")
+            row = self.schedule_tree.item(item, "values")
+            time_text, temp, mode_name, fan_speed_name = row[0], row[1], row[2], row[3]
+            sv = row[4] if len(row) > 4 else "固定"
+            sh = row[5] if len(row) > 5 else "固定"
             data.append({
                 "时间": time_text,
                 "温度": temp,
                 "模式": mode_name,
-                "风速": fan_speed_name
+                "风速": fan_speed_name,
+                "上下摆风": sv,
+                "左右摆风": sh
             })
         try:
             pd.DataFrame(data).to_excel(path, index=False)
@@ -468,9 +523,18 @@ class HitachiApp(tk.Tk):
         self.log_rows.clear()
 
     def append_log(self, text):
-        stamp = dt.datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert(tk.END, f"[{stamp}] {text}\n")
+        now_dt = dt.datetime.now()
+        stamp_gui = now_dt.strftime("%H:%M:%S")
+        stamp_file = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+        log_line_gui = f"[{stamp_gui}] {text}\n"
+        log_line_file = f"[{stamp_file}] {text}\n"
+        self.log_text.insert(tk.END, log_line_gui)
         self.log_text.see(tk.END)
+        try:
+            with open("datarecord.txt", "a", encoding="utf-8") as f:
+                f.write(log_line_file)
+        except Exception as e:
+            print(f"写入操作日志文件失败: {e}")
 
     def _poll_events(self):
         while True:
@@ -506,6 +570,14 @@ class HitachiApp(tk.Tk):
                 count = int(parts[idx + 1])
                 remaining = 120 - count
                 self.sched_count_var.set(f"设备存储: {count} / 120 (可用: {remaining})")
+            if "swing_v" in parts:
+                idx = parts.index("swing_v")
+                sv_val = int(parts[idx + 1])
+                self.swing_v_var.set("摆动" if sv_val else "固定")
+            if "swing_h" in parts:
+                idx = parts.index("swing_h")
+                sh_val = int(parts[idx + 1])
+                self.swing_h_var.set("摆动" if sh_val else "固定")
         except Exception as e:
             print(f"解析状态失败: {e}")
 
@@ -521,19 +593,23 @@ class HitachiApp(tk.Tk):
             fan = int(parts[8])
         except ValueError:
             return
+        sv_val = int(parts[10]) if (len(parts) > 10 and parts[9] == "swing_v") else 0
+        sh_val = int(parts[12]) if (len(parts) > 12 and parts[11] == "swing_h") else 0
         row = {
             "时间戳": parts[1],
             "执行类型": parts[2],
             "温度": parts[4],
             "模式": MODE_NAMES.get(mode, str(mode)),
             "风速": FAN_SPEED_NAMES.get(fan, str(fan)),
+            "上下摆风": "摆动" if sv_val else "固定",
+            "左右摆风": "摆动" if sh_val else "固定",
         }
         self.log_rows.append(row)
         try:
             import os
             file_exists = os.path.exists("ac_control_log.csv")
             with open("ac_control_log.csv", "a", encoding="utf-8-sig", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=["时间戳", "执行类型", "温度", "模式", "风速"])
+                writer = csv.DictWriter(f, fieldnames=["时间戳", "执行类型", "温度", "模式", "风速", "上下摆风", "左右摆风"])
                 if not file_exists:
                     writer.writeheader()
                 writer.writerow(row)
@@ -551,7 +627,9 @@ class HitachiApp(tk.Tk):
         temp = parts[3]
         mode = MODE_NAMES.get(int(parts[4]), parts[4])
         fan = FAN_SPEED_NAMES.get(int(parts[6]), parts[6])
-        self.schedule_tree.insert("", tk.END, values=(time_text, temp, mode, fan))
+        sv = "摆动" if (len(parts) > 7 and parts[7] == "1") else "固定"
+        sh = "摆动" if (len(parts) > 8 and parts[8] == "1") else "固定"
+        self.schedule_tree.insert("", tk.END, values=(time_text, temp, mode, fan, sv, sh))
 
     def _snap_temp(self, value):
         snapped = round(float(value) * 2) / 2

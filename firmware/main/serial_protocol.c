@@ -54,12 +54,14 @@ static void handle_status(const serial_protocol_context_t *ctx)
     size_t count = scheduler_count();
     char temp_text[8] = {0};
     temperature_format_x2(ctx->state->temperature_x2, temp_text, sizeof(temp_text));
-    printf("OK,STATUS,temperature,%s,mode,%u,mode_name,%s,fan_speed,%u,power,%u,schedules,%u\n",
+    printf("OK,STATUS,temperature,%s,mode,%u,mode_name,%s,fan_speed,%u,power,%u,swing_v,%u,swing_h,%u,schedules,%u\n",
            temp_text,
            ctx->state->mode,
            mode_name(ctx->state->mode),
            ctx->state->fan_speed,
            ctx->state->power_on ? 1 : 0,
+           ctx->state->swing_v ? 1 : 0,
+           ctx->state->swing_h ? 1 : 0,
            (unsigned)count);
 }
 
@@ -71,14 +73,16 @@ static void handle_list(void)
     for (size_t i = 0; i < count; i++) {
         char temp_text[8] = {0};
         temperature_format_x2(entries[i].temperature_x2, temp_text, sizeof(temp_text));
-        printf("ITEM,%u,%02u:%02u,%s,%u,%s,%u\n",
+        printf("ITEM,%u,%02u:%02u,%s,%u,%s,%u,%u,%u\n",
                (unsigned)i,
                entries[i].minute_of_day / 60,
                entries[i].minute_of_day % 60,
                temp_text,
                entries[i].mode,
                mode_name(entries[i].mode),
-               entries[i].fan_speed);
+               entries[i].fan_speed,
+               entries[i].swing_v ? 1 : 0,
+               entries[i].swing_h ? 1 : 0);
     }
 }
 
@@ -121,6 +125,8 @@ void serial_protocol_handle_line(const char *line, const serial_protocol_context
         uint8_t temperature_x2 = 0;
         uint8_t mode = 0;
         uint8_t fan_speed = 0;
+        bool swing_v = ctx->state->swing_v;
+        bool swing_h = ctx->state->swing_h;
         if (!temperature_parse_x2(strtok(NULL, ","), &temperature_x2) ||
             !parse_u8(strtok(NULL, ","), &mode) ||
             mode > AC_MODE_OFF) {
@@ -134,7 +140,25 @@ void serial_protocol_handle_line(const char *line, const serial_protocol_context
                 return;
             }
         }
-        esp_err_t err = ctx->set_cb(temperature_x2, mode, fan_speed, "manual");
+        char *swing_v_str = strtok(NULL, ",");
+        if (swing_v_str) {
+            uint8_t val = 0;
+            if (!parse_u8(swing_v_str, &val) || val > 1) {
+                printf("ERR,bad_set_swing_v\n");
+                return;
+            }
+            swing_v = val == 1;
+        }
+        char *swing_h_str = strtok(NULL, ",");
+        if (swing_h_str) {
+            uint8_t val = 0;
+            if (!parse_u8(swing_h_str, &val) || val > 1) {
+                printf("ERR,bad_set_swing_h\n");
+                return;
+            }
+            swing_h = val == 1;
+        }
+        esp_err_t err = ctx->set_cb(temperature_x2, mode, fan_speed, swing_v, swing_h, "manual");
         printf(err == ESP_OK ? "OK,SET\n" : "ERR,SET,%s\n", esp_err_to_name(err));
         return;
     }
@@ -144,6 +168,8 @@ void serial_protocol_handle_line(const char *line, const serial_protocol_context
         uint8_t temperature_x2 = 0;
         uint8_t mode = 0;
         uint8_t fan_speed = 0;
+        bool swing_v = false;
+        bool swing_h = false;
         uint16_t minute_of_day = 0;
         if (!time_utils_parse_hhmm(time_text, &minute_of_day) ||
             !temperature_parse_x2(strtok(NULL, ","), &temperature_x2) ||
@@ -159,7 +185,25 @@ void serial_protocol_handle_line(const char *line, const serial_protocol_context
                 return;
             }
         }
-        esp_err_t err = scheduler_add_or_replace(minute_of_day, temperature_x2, mode, fan_speed);
+        char *swing_v_str = strtok(NULL, ",");
+        if (swing_v_str) {
+            uint8_t val = 0;
+            if (!parse_u8(swing_v_str, &val) || val > 1) {
+                printf("ERR,bad_schedule_swing_v\n");
+                return;
+            }
+            swing_v = val == 1;
+        }
+        char *swing_h_str = strtok(NULL, ",");
+        if (swing_h_str) {
+            uint8_t val = 0;
+            if (!parse_u8(swing_h_str, &val) || val > 1) {
+                printf("ERR,bad_schedule_swing_h\n");
+                return;
+            }
+            swing_h = val == 1;
+        }
+        esp_err_t err = scheduler_add_or_replace(minute_of_day, temperature_x2, mode, fan_speed, swing_v, swing_h);
         printf(err == ESP_OK ? "OK,SCHEDULE\n" : "ERR,SCHEDULE,%s\n", esp_err_to_name(err));
         return;
     }

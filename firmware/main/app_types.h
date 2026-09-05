@@ -24,6 +24,8 @@ typedef struct {
     uint8_t mode;
     uint8_t fan_speed;
     bool power_on;
+    bool swing_v;
+    bool swing_h;
 } ac_state_t;
 
 typedef struct {
@@ -32,4 +34,6 @@ typedef struct {
     uint8_t mode;
     uint8_t fan_speed;
     bool enabled;
+    bool swing_v;
+    bool swing_h;
 } schedule_entry_t;

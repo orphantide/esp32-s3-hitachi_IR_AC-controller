@@ -19,16 +19,17 @@
 static const char *TAG = "app";
 static ac_state_t s_state;
 
-static void print_log_line(const datetime_t *now, const char *type, uint8_t temperature_x2, uint8_t mode, uint8_t fan_speed)
+static void print_log_line(const datetime_t *now, const char *type, uint8_t temperature_x2, uint8_t mode, uint8_t fan_speed, bool swing_v, bool swing_h)
 {
     char text[32] = {0};
     char temp_text[8] = {0};
     time_utils_format_datetime(now, text, sizeof(text));
     temperature_format_x2(temperature_x2, temp_text, sizeof(temp_text));
-    printf("LOG,%s,%s,temperature,%s,mode,%u,fan_speed,%u\n", text, type, temp_text, mode, fan_speed);
+    printf("LOG,%s,%s,temperature,%s,mode,%u,fan_speed,%u,swing_v,%u,swing_h,%u\n",
+           text, type, temp_text, mode, fan_speed, swing_v ? 1 : 0, swing_h ? 1 : 0);
 }
 
-static esp_err_t apply_control(uint8_t temperature_x2, uint8_t mode, uint8_t fan_speed, const char *type)
+static esp_err_t apply_control(uint8_t temperature_x2, uint8_t mode, uint8_t fan_speed, bool swing_v, bool swing_h, const char *type)
 {
     datetime_t now = {0};
     time_utils_get_system_time(&now);
@@ -36,12 +37,14 @@ static esp_err_t apply_control(uint8_t temperature_x2, uint8_t mode, uint8_t fan
     s_state.temperature_x2 = temperature_x2;
     s_state.mode = mode;
     s_state.fan_speed = fan_speed;
+    s_state.swing_v = swing_v;
+    s_state.swing_h = swing_h;
     s_state.power_on = mode != AC_MODE_OFF;
 
     esp_err_t err = ir_hitachi_send_state(&s_state, &now);
     if (err == ESP_OK) {
         storage_save_state(&s_state);
-        print_log_line(&now, type, temperature_x2, mode, fan_speed);
+        print_log_line(&now, type, temperature_x2, mode, fan_speed, swing_v, swing_h);
     }
     return err;
 }
@@ -51,7 +54,7 @@ static esp_err_t sync_time(const datetime_t *dt)
     time_utils_set_system_time(dt);
     esp_err_t err = rtc_ds3231_set_time(dt);
     if (err == ESP_OK) {
-        print_log_line(dt, "sync", s_state.temperature_x2, s_state.mode, s_state.fan_speed);
+        print_log_line(dt, "sync", s_state.temperature_x2, s_state.mode, s_state.fan_speed, s_state.swing_v, s_state.swing_h);
     }
     return err;
 }
@@ -94,7 +97,7 @@ static void schedule_task(void *arg)
         schedule_entry_t due = {0};
         time_utils_get_system_time(&now);
         if (scheduler_check_due(&now, &due)) {
-            apply_control(due.temperature_x2, due.mode, due.fan_speed, "scheduled");
+            apply_control(due.temperature_x2, due.mode, due.fan_speed, due.swing_v, due.swing_h, "scheduled");
         }
         vTaskDelay(pdMS_TO_TICKS(1000));
     }

@@ -11,7 +11,7 @@
 #define STORAGE_SCHEDULE_KEY    "schedule"
 #define STORAGE_STATE_MAGIC     0x48414353U
 #define STORAGE_SCHEDULE_MAGIC  0x48414350U
-#define STORAGE_VERSION         1
+#define STORAGE_VERSION         2
 
 static const char *TAG = "storage";
 
@@ -57,6 +57,8 @@ esp_err_t storage_load_state(ac_state_t *state)
         .mode = AC_MODE_COOL,
         .fan_speed = 0,
         .power_on = true,
+        .swing_v = false,
+        .swing_h = false,
     };
 
     nvs_handle_t handle;

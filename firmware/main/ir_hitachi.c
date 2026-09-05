@@ -53,11 +53,11 @@ static uint8_t map_fan_speed(uint8_t fan_speed)
         case 4:  return 0x50; // 4档
         case 5:  return 0x30; // 5档
         case 0:
-        default: return 0x40; // Auto
+        default: return 0x40; // Auto (Verified 0x40 is sent for Auto Fan by the physical remote)
     }
 }
 
-static void hitachi_build_state(const ac_state_t *state, uint8_t raw[HITACHI_STATE_LEN], uint8_t toggle_bit)
+static void hitachi_build_state(const ac_state_t *state, uint8_t raw[HITACHI_STATE_LEN], uint8_t button_code)
 {
     // 1. Initialize Constant Preamble (B00 - B08)
     raw[0] = 0xC0;
@@ -73,9 +73,9 @@ static void hitachi_build_state(const ac_state_t *state, uint8_t raw[HITACHI_STA
     // Default remaining bytes to 0
     memset(raw + 9, 0, HITACHI_STATE_LEN - 9);
 
-    // Set other constants
-    raw[14] = 0x70;
-    raw[15] = 0x70;
+    // Set swing options in Byte 14 and Byte 15
+    raw[14] = state->swing_v ? 0x70 : 0x30;
+    raw[15] = state->swing_h ? 0x70 : 0x30;
     raw[24] = 0x20;
     raw[25] = 0x08;
 
@@ -105,18 +105,14 @@ static void hitachi_build_state(const ac_state_t *state, uint8_t raw[HITACHI_STA
     ESP_LOGI(TAG, "build_state: fan_speed=%u, mapped=0x%02X", (unsigned)state->fan_speed, (unsigned)map_fan_speed(state->fan_speed));
     raw[13] = map_fan_speed(state->fan_speed);
 
-    // 4. Power (B18) and Toggle (B09)
+    // 4. Power (B18) and Button Code (B09)
     if (state->mode == AC_MODE_OFF) {
         raw[18] = 0x00;
     } else {
         raw[18] = 0x80;
     }
 
-    if (toggle_bit) {
-        raw[9] = 0x60;
-    } else {
-        raw[9] = 0x18;
-    }
+    raw[9] = button_code;
 
     // 5. Checksum (B28) is initialized to 0, will be calculated on unshifted bytes in send_state
     raw[28] = 0x00;
@@ -223,44 +219,40 @@ esp_err_t ir_hitachi_send_state(const ac_state_t *state, const datetime_t *now)
         return ESP_ERR_INVALID_ARG;
     }
 
-    static bool s_last_power_on = false;
-    bool new_power_on = (state->mode != AC_MODE_OFF);
-    bool is_power_command = (new_power_on != s_last_power_on);
-    s_last_power_on = new_power_on;
+    static ac_state_t s_last_state = {0};
+    static bool s_last_state_valid = false;
+
+    bool previous_power_on = s_last_state_valid && s_last_state.mode != AC_MODE_OFF;
+    bool power_changed = (state->mode != AC_MODE_OFF) != previous_power_on;
 
     esp_err_t err = ESP_OK;
     size_t count = 0;
 
+    uint8_t button_code = 0x18; // Default: temp/mode/swing change (0x18 in raw_shifted = 0x0C decoded)
+    if (power_changed) {
+        button_code = 0x60; // Power toggle (0x60 in raw_shifted = 0x03 decoded)
+    }
     uint8_t raw_shifted[HITACHI_STATE_LEN] = {0};
-    // Send power command (ON/OFF) with B9 = 0xC0 (shifted 0x60), adjustments with B9 = 0x30 (shifted 0x18)
-    hitachi_build_state(state, raw_shifted, is_power_command ? 1 : 0);
+    hitachi_build_state(state, raw_shifted, button_code);
 
     uint8_t raw[HITACHI_STATE_LEN] = {0};
     shift_left_1bit(raw_shifted, raw, HITACHI_STATE_LEN);
 
-    // Standard Hitachi Checksum calculated on the unshifted transmit array
     uint8_t sum = 62;
     for (int i = 0; i < 28; i++) {
         sum -= rev8(raw[i]);
     }
     raw[28] = rev8(sum);
 
-    char shifted_hex[90] = {0};
-    char unshifted_hex[90] = {0};
-    for (int i = 0; i < HITACHI_STATE_LEN; i++) {
-        snprintf(&shifted_hex[i * 3], 4, "%02X ", raw_shifted[i]);
-        snprintf(&unshifted_hex[i * 3], 4, "%02X ", raw[i]);
-    }
-    ESP_LOGI(TAG, "Shifted:  %s", shifted_hex);
-    ESP_LOGI(TAG, "Transmit: %s", unshifted_hex);
-
     err = transmit_section(raw, HITACHI_STATE_LEN, true, HITACHI_FINAL_SPACE_US, &count);
 
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "sent hitachi29 state single-frame power_cmd=%d temp=%u mode=%u symbols=%u",
-                 is_power_command, state->temperature_x2, state->mode, (unsigned)count);
+        s_last_state = *state; // Update last state on success
+        ESP_LOGI(TAG, "sent hitachi29 state button_code=0x%02X temp=%u mode=%u symbols=%u",
+                 button_code, state->temperature_x2, state->mode, (unsigned)count);
     } else {
         ESP_LOGW(TAG, "hitachi29 transmit failed: %s", esp_err_to_name(err));
     }
+
     return err;
 }
